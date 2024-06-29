@@ -1,4 +1,4 @@
-from django.db.models import Prefetch, F, Sum
+from django.db.models import Prefetch, Sum
 from rest_framework.viewsets import ReadOnlyModelViewSet
 from clients.models import Client
 from services.models import Subscription
