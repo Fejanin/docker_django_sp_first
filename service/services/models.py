@@ -1,6 +1,8 @@
 from django.core.validators import MaxValueValidator
 from django.db import models
+from django.db.models.signals import post_delete
 from clients.models import Client
+from services.receivers import delete_cache_total_sum
 from services.tasks import set_price, set_comment
 
 
@@ -9,11 +11,12 @@ class Service(models.Model):
     full_price = models.PositiveIntegerField()
 
     def save(self, *args, **kwargs):
+        obj = super().save(*args, **kwargs)
         if self.__full_price != self.full_price:
             for subscription in self.suscriptions.all():
                 set_price.delay(subscription.id)
                 set_comment.delay(subscription.id)
-        return super().save(*args, **kwargs)
+        return obj
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -37,11 +40,12 @@ class Plan(models.Model):
                                                    ])
 
     def save(self, *args, **kwargs):
+        obj = super().save(*args, **kwargs)
         if self.__discount_percent != self.discount_percent:
             for subscription in self.suscriptions.all():
                 set_price.delay(subscription.id)
                 set_comment.delay(subscription.id)
-        return super().save(*args, **kwargs)
+        return obj
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -58,5 +62,15 @@ class Subscription(models.Model):
     price = models.PositiveIntegerField(default=0)
     comment = models.CharField(max_length=50, default='')
 
+    def save(self, *args, **kwargs):
+        creating = not bool(self.id)
+        obj = super().save(*args, **kwargs)
+        if creating:
+            set_price.delay(self.id)
+        return obj
+
     def __str__(self):
         return f'{self.client} is subscribed to the service {self.service} according to the tariff plan {self.plan}'
+
+
+post_delete.connect(delete_cache_total_sum, sender=Subscription)
